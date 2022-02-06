@@ -28,6 +28,7 @@ app.get("/api/hello", (req, res) => {
   res.send("Hello !!!");
 });
 
+// /api/users
 app.post("/api/users/register", (req, res) => {
   const user = new User(req.body);
 
@@ -84,6 +85,24 @@ app.get("/api/users/logout", auth, (req, res) => {
   User.findOneAndUpdate({ _id: req.user._id }, { token: "" }, (err, user) => {
     if (err) return res.json({ success: false, err });
     return res.status(200).send({
+      success: true,
+    });
+  });
+});
+
+// /api/admin
+app.get("/api/admin/memberlist", (req, res) => {
+  User.find({ role: { $gte: 1 } }, (err, data) => res.json(data));
+});
+
+app.get("/api/admin/associatelist", (req, res) => {
+  User.find({ role: 0 }, (err, data) => res.json(data));
+});
+
+app.post("/api/admin/levelup", (req, res) => {
+  User.findOneAndUpdate({ id: req.body.id }, { role: 1 }, (err, data) => {
+    if (err) return res.json({ success: false, err });
+    return res.status(200).json({
       success: true,
     });
   });
