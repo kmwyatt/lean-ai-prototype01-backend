@@ -9,6 +9,33 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 
+const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
+
+try {
+  fs.readdirSync("./public/uploads");
+} catch (err) {
+  console.log("mkdir");
+  fs.mkdirSync("./public/uploads");
+}
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination(req, file, done) {
+      done(null, `./public/uploads`);
+    },
+    // filename(req, file, done) {
+    //   // 파일 이름이 겹치는 걸 피하기 위해 파일 이름에 현재 시간 삽입
+    //   const ext = path.extname(file.originalname);
+    //   done(null, path.basename(file.originalname, ext) + Date.now() + ext);
+    // },
+    filename(req, file, done) {
+      done(null, file.originalname);
+    },
+  }),
+});
+
 const mongoose = require("mongoose");
 
 mongoose
@@ -30,12 +57,16 @@ app.get("/api/hello", (req, res) => {
 
 // /api/users
 app.post("/api/users/register", (req, res) => {
-  const user = new User(req.body);
-
-  user.save((err, userInfo) => {
-    if (err) return res.json({ success: false, err });
-    return res.status(200).json({
-      success: true,
+  User.count({}, function (err, count) {
+    const user = new User({
+      index: count + 1,
+      ...req.body,
+    });
+    user.save((err, userInfo) => {
+      if (err) return res.json({ success: false, err });
+      return res.status(200).json({
+        success: true,
+      });
     });
   });
 });
@@ -106,6 +137,15 @@ app.post("/api/admin/levelup", (req, res) => {
       success: true,
     });
   });
+});
+
+app.post("/api/admin/createproject", upload.single("file"), (req, res) => {
+  console.log("file!!", req.file);
+  console.log("body!!!", req.body);
+  User.count({}, function (err, count) {
+    console.log("Number of users:", count);
+  });
+  res.status(200);
 });
 
 app.listen(PORT, () => console.log(`Example app listening on port ${PORT}!`));
