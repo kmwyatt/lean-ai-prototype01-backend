@@ -6,6 +6,11 @@ const jwt = require("jsonwebtoken");
 const userSchema = new mongoose.Schema({
   index: {
     type: Number,
+    default: this.count,
+  },
+  date: {
+    type: Date,
+    default: Date.now,
   },
   id: {
     type: String,

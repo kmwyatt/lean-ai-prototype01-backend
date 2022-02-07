@@ -2,8 +2,6 @@ const express = require("express");
 const app = express();
 const PORT = 4000;
 const cookieParser = require("cookie-parser");
-const { auth } = require("./middleware/auth");
-const { User } = require("./models/User");
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -13,30 +11,32 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 
+app.use("/img", express.static(path.join(__dirname, "./uploads")));
+
 try {
-  fs.readdirSync("./public/uploads");
+  fs.readdirSync("./uploads");
 } catch (err) {
   console.log("mkdir");
-  fs.mkdirSync("./public/uploads");
+  fs.mkdirSync("./uploads");
 }
 
 const upload = multer({
   storage: multer.diskStorage({
-    destination(req, file, done) {
-      done(null, `./public/uploads`);
+    destination(req, file, callback) {
+      callback(null, `./uploads`);
     },
-    // filename(req, file, done) {
-    //   // 파일 이름이 겹치는 걸 피하기 위해 파일 이름에 현재 시간 삽입
-    //   const ext = path.extname(file.originalname);
-    //   done(null, path.basename(file.originalname, ext) + Date.now() + ext);
-    // },
-    filename(req, file, done) {
-      done(null, file.originalname);
+    filename(req, file, callback) {
+      // 파일 이름이 겹치는 걸 피하기 위해 파일 이름에 현재 시간 삽입
+      const ext = path.extname(file.originalname);
+      callback(null, path.basename(file.originalname, ext) + Date.now() + ext);
     },
   }),
 });
 
 const mongoose = require("mongoose");
+const { auth } = require("./middleware/auth");
+const { User } = require("./models/User");
+const { Project } = require("./models/Project");
 
 mongoose
   .connect(
@@ -103,6 +103,7 @@ app.get("/api/users/auth", auth, (req, res) => {
   res.status(200).json({
     _id: req.user._id,
     isAuth: true,
+    index: req.user.index,
     id: req.user.id,
     name: req.user.name,
     phoneNumber: req.user.phoneNumber,
@@ -123,11 +124,15 @@ app.get("/api/users/logout", auth, (req, res) => {
 
 // /api/admin
 app.get("/api/admin/memberlist", (req, res) => {
-  User.find({ role: { $gte: 1 } }, (err, data) => res.json(data));
+  User.find({ role: { $gte: 1 } }, [], { sort: { index: -1 } }, (err, data) =>
+    res.json(data)
+  );
 });
 
 app.get("/api/admin/associatelist", (req, res) => {
-  User.find({ role: 0 }, (err, data) => res.json(data));
+  User.find({ role: 0 }, [], { sort: { index: -1 } }, (err, data) =>
+    res.json(data)
+  );
 });
 
 app.post("/api/admin/levelup", (req, res) => {
@@ -142,10 +147,90 @@ app.post("/api/admin/levelup", (req, res) => {
 app.post("/api/admin/createproject", upload.single("file"), (req, res) => {
   console.log("file!!", req.file);
   console.log("body!!!", req.body);
-  User.count({}, function (err, count) {
-    console.log("Number of users:", count);
+  Project.count({}, function (err, count) {
+    const project = new Project({
+      index: count + 1,
+      file: req.file.filename,
+      ...req.body,
+    });
+    project.save((err, projectInfo) => {
+      if (err) return res.json({ success: false, err });
+      return res.status(200).json({
+        success: true,
+      });
+    });
   });
-  res.status(200);
+});
+
+// /api/project
+app.post("/api/project/joinableproject", (req, res) => {
+  console.log(req.body.userIndex);
+  Project.find(
+    {
+      $and: [
+        { submitted: { $not: { $all: [req.body.userIndex] } } },
+        { joined: { $not: { $all: [req.body.userIndex] } } },
+      ],
+    },
+    [],
+    { sort: { index: -1 } },
+    (err, data) => res.json(data)
+  );
+});
+
+app.post("/api/project/submittedproject", (req, res) => {
+  console.log(req.body.userIndex);
+  Project.find(
+    { submitted: req.body.userIndex },
+    [],
+    { sort: { index: -1 } },
+    (err, data) => res.json(data)
+  );
+});
+
+app.post("/api/project/joinedproject", (req, res) => {
+  console.log(req.body.userIndex);
+  Project.find(
+    { joined: req.body.userIndex },
+    [],
+    { sort: { index: -1 } },
+    (err, data) => res.json(data)
+  );
+});
+
+app.post("/api/project/usersubmit", (req, res) => {
+  Project.findOneAndUpdate(
+    { index: req.body.projectIndex },
+    { $push: { submitted: req.body.userIndex } },
+    (err, data) =>
+      res.status(200).json({
+        success: true,
+      })
+  );
+});
+
+app.post("/api/project/userjoin", (req, res) => {
+  Project.findOneAndUpdate(
+    { index: req.body.projectIndex },
+    {
+      $pull: { submitted: req.body.userIndex },
+      $push: { joined: req.body.userIndex },
+    },
+    (err, data) =>
+      res.status(200).json({
+        success: true,
+      })
+  );
+});
+
+app.post("/api/project/submitteduser", (req, res) => {
+  console.log(req.body.projectIndex);
+  Project.find({ index: req.body.projectIndex }, (err, data) => {
+    console.log(data[0].submitted);
+    User.find({ index: { $in: data[0].submitted } }, (err, data) => {
+      res.json(data);
+    });
+  });
 });
 
 app.listen(PORT, () => console.log(`Example app listening on port ${PORT}!`));
