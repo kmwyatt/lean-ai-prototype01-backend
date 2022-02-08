@@ -37,6 +37,7 @@ const mongoose = require("mongoose");
 const { auth } = require("./middleware/auth");
 const { User } = require("./models/User");
 const { Project } = require("./models/Project");
+const { Work } = require("./models/Work");
 
 mongoose
   .connect(
@@ -231,6 +232,45 @@ app.post("/api/project/submitteduser", (req, res) => {
       res.json(data);
     });
   });
+});
+
+// /api/work
+app.post("/api/work/uploadwork", upload.single("file"), (req, res) => {
+  console.log("file!!", req.file);
+  console.log("body!!!", req.body);
+  Work.count({}, function (err, count) {
+    const project = new Work({
+      index: count + 1,
+      file: req.file.filename,
+      ...req.body,
+    });
+    project.save((err, workInfo) => {
+      if (err) return res.json({ success: false, err });
+      return res.status(200).json({
+        success: true,
+      });
+    });
+  });
+});
+
+app.post("/api/work/uploaded", (req, res) => {
+  console.log(req.body.projectIndex);
+  Work.find(
+    { project: req.body.projectIndex },
+    [],
+    { sort: { index: -1 } },
+    (err, data) => {
+      res.json(data);
+    }
+  );
+});
+
+app.post("/api/work/feedback", (req, res) => {
+  Work.findOneAndUpdate({ index: req.body.index }, req.body, (err, data) =>
+    res.status(200).json({
+      success: true,
+    })
+  );
 });
 
 app.listen(PORT, () => console.log(`Example app listening on port ${PORT}!`));
